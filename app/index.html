@@ -1,0 +1,387 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <!-- CSP stricte : nos propres fichiers uniquement, et une seule destination réseau : l'API de GitHub. -->
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://api.github.com; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none'">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#f6f1e6" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#1b1a17" media="(prefers-color-scheme: dark)">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="Marginalia">
+  <meta name="format-detection" content="telephone=no">
+  <meta name="referrer" content="no-referrer">
+  <title>Marginalia</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="stylesheet" href="css/app.css">
+  <!-- api.js (module) d'abord : il fournit window.marginalia. Puis un fichier par écran ; core.js fournit `M`. -->
+  <script type="module" src="js/api.js"></script>
+  <script src="js/ui/core.js" defer></script>
+  <script src="js/ui/lire.js" defer></script>
+  <script src="js/ui/retenir.js" defer></script>
+  <script src="js/ui/appliquer.js" defer></script>
+  <script src="js/ui/progres.js" defer></script>
+  <script src="js/ui/reglages.js" defer></script>
+  <script src="js/ui/connexion.js" defer></script>
+</head>
+<body>
+  <div class="boot" id="boot" aria-hidden="true">
+    <svg class="brand-mark big" viewBox="0 0 24 24"><rect class="bm-paper" x="3.5" y="2.5" width="17" height="19" rx="3"/><path class="bm-margin" d="M8.5 4.5v15"/><path class="bm-lines" d="M11.5 8.5h6M11.5 12h6M11.5 15.5h4"/></svg>
+  </div>
+
+  <!-- ============ Premier lancement : installer, puis connecter GitHub ============ -->
+  <section id="connect" class="connect" hidden>
+    <div class="connect-inner">
+      <svg class="brand-mark big" viewBox="0 0 24 24" aria-hidden="true"><rect class="bm-paper" x="3.5" y="2.5" width="17" height="19" rx="3"/><path class="bm-margin" d="M8.5 4.5v15"/><path class="bm-lines" d="M11.5 8.5h6M11.5 12h6M11.5 15.5h4"/></svg>
+      <h1>Lire, retenir,<br><em>appliquer.</em></h1>
+
+      <!-- Étape 1 : sur iPhone, l'app doit être sur l'écran d'accueil (sinon Safari garde les données à part). -->
+      <div id="installStep" hidden>
+        <p class="lead">Avant tout : installe Marginalia sur ton écran d'accueil. Elle s'ouvrira en plein écran, comme une vraie app, et gardera tes notes hors ligne.</p>
+        <ol class="steps">
+          <li>Touche <strong>Partager</strong> <span class="share-glyph" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 15V3.5M8 7.5l4-4 4 4M7 11H5.5v9.5h13V11H17"/></svg></span> en bas de Safari.</li>
+          <li>Choisis <strong>Sur l'écran d'accueil</strong> (fais défiler si besoin), puis <strong>Ajouter</strong>.</li>
+          <li>Ouvre Marginalia <strong>depuis l'icône</strong> et continue là-bas.</li>
+        </ol>
+        <p class="fine">Pourquoi : Safari et l'app installée ne partagent pas leur stockage. Si tu te connectes ici, il faudra recommencer dans l'app.</p>
+        <button type="button" class="link-btn" id="skipInstall">Continuer dans le navigateur quand même</button>
+      </div>
+
+      <!-- Étape 2 : relier le dépôt GitHub privé qui contiendra les notes. -->
+      <form id="connectForm" class="connect-form" autocomplete="off" hidden>
+        <p class="lead">Tes notes vivent dans <strong>ton</strong> dépôt GitHub privé : gratuit, sauvegardé, lisible dans Obsidian sur ton PC.</p>
+        <ol class="steps">
+          <li>Crée sur GitHub un dépôt <strong>privé</strong> vide, nommé par exemple <span class="code">marginalia-data</span>.</li>
+          <li>Crée un <strong>jeton</strong> limité à ce dépôt : <a id="tokenLink" target="_blank" rel="noopener">ouvrir GitHub</a> — dans <em>Repository access</em>, choisis <em>Only select repositories › marginalia-data</em> ; la permission <em>Contents : Read and write</em> est déjà cochée. Génère, puis copie le jeton.</li>
+          <li>Colle-le ici.</li>
+        </ol>
+        <div class="field-row">
+          <label class="field">Compte GitHub
+            <input id="cxOwner" name="owner" autocapitalize="none" autocorrect="off" spellcheck="false" required maxlength="39" placeholder="pseudo">
+          </label>
+          <label class="field">Dépôt
+            <input id="cxRepo" name="repo" autocapitalize="none" autocorrect="off" spellcheck="false" required maxlength="100" value="marginalia-data">
+          </label>
+        </div>
+        <label class="field">Jeton
+          <input id="cxToken" name="token" type="password" autocapitalize="none" autocorrect="off" spellcheck="false" required placeholder="github_pat_…">
+        </label>
+        <div class="paste-row"><button type="button" class="btn small" id="cxPaste">Coller le jeton</button></div>
+        <p class="form-error" id="cxError" role="alert" hidden></p>
+        <button type="submit" class="btn primary big wide" id="cxSubmit">Connecter</button>
+        <p class="fine">Le jeton reste sur ce téléphone et ne sert qu'à parler à api.github.com. Il ne donne accès qu'au dépôt choisi, et tu peux le révoquer à tout moment sur GitHub.</p>
+      </form>
+    </div>
+  </section>
+
+  <!-- ============ L'app ============ -->
+  <div id="app" class="app" hidden>
+    <header class="topbar">
+      <div class="brand">
+        <svg class="brand-mark" viewBox="0 0 24 24" aria-hidden="true"><rect class="bm-paper" x="3.5" y="2.5" width="17" height="19" rx="3"/><path class="bm-margin" d="M8.5 4.5v15"/><path class="bm-lines" d="M11.5 8.5h6M11.5 12h6M11.5 15.5h4"/></svg>
+        <span class="brand-name" id="viewTitle">Marginalia</span>
+      </div>
+      <button class="sync-pill" id="syncBtn" type="button" data-state="idle"><span class="sync-dot" aria-hidden="true"></span><span id="syncText">…</span></button>
+      <button class="icon-btn" id="settingsBtn" type="button" aria-label="Réglages">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/></svg>
+      </button>
+    </header>
+
+    <!-- ============ LIRE ============ -->
+    <main id="view-lire" class="view">
+      <section class="book">
+        <div class="book-row">
+          <label class="visually-hidden" for="bookSelect">Livre en cours</label>
+          <select id="bookSelect" class="book-select"></select>
+          <button class="icon-btn bordered" id="newBookBtn" type="button" aria-label="Nouveau livre">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+          </button>
+          <button class="icon-btn bordered" id="bookMenuBtn" type="button" aria-label="Fiche du livre">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="12" r="1.3"/><circle cx="12" cy="12" r="1.3"/><circle cx="18" cy="12" r="1.3"/></svg>
+          </button>
+        </div>
+        <div class="book-meta" id="bookMeta">
+          <span id="bookAuthor" class="book-author"></span>
+          <span id="progressText" class="progress-text"></span>
+        </div>
+        <div class="progress" id="progress" hidden><div class="progress-bar" id="progressBar"></div></div>
+      </section>
+
+      <section class="empty-book" id="emptyBook" hidden>
+        <p>Aucun livre pour l'instant.</p>
+        <button class="btn primary big" id="emptyNewBookBtn" type="button">Ajouter le livre que je lis</button>
+      </section>
+
+      <section class="today" id="todayStrip" hidden>
+        <svg class="ring" viewBox="0 0 36 36" aria-hidden="true">
+          <circle class="ring-track" cx="18" cy="18" r="15"/>
+          <circle class="ring-value" id="todayRing" cx="18" cy="18" r="15"/>
+        </svg>
+        <div class="today-text">
+          <span class="today-main" id="todayMain"></span>
+          <span class="today-sub" id="todaySub"></span>
+        </div>
+        <button class="btn" id="sessionBtn" type="button"></button>
+      </section>
+
+      <form id="noteForm" class="note-form" autocomplete="off">
+        <div class="types" role="radiogroup" aria-label="Type de note">
+          <button type="button" class="chip" data-type="citation" role="radio"><span class="chip-glyph">“</span>Citation</button>
+          <button type="button" class="chip" data-type="idee" role="radio"><span class="chip-glyph">✦</span>Idée</button>
+          <button type="button" class="chip" data-type="question" role="radio"><span class="chip-glyph">?</span>Question</button>
+          <button type="button" class="chip" data-type="appliquer" role="radio"><span class="chip-glyph">✓</span>À appliquer</button>
+        </div>
+
+        <div class="sheet">
+          <textarea id="textInput" class="field-text" rows="4" spellcheck="true" autocapitalize="sentences"></textarea>
+          <textarea id="commentInput" class="field-comment" rows="2" spellcheck="true" autocapitalize="sentences" placeholder="💭 Ton commentaire (facultatif)"></textarea>
+        </div>
+        <div class="sheet-tools">
+          <button type="button" class="tool-btn" id="pasteBtn">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="4.5" width="12" height="16" rx="2"/><path d="M9.5 4.5V3h5v1.5M9 10h6M9 13.5h6M9 17h3.5"/></svg>Coller
+          </button>
+          <span class="tool-hint">🎙 Pour dicter : le micro du clavier</span>
+        </div>
+        <p class="apply-hint" id="applyHint" hidden>
+          Une action précise se fait, une intention vague s'oublie.
+          <button type="button" class="link-btn" id="applyTemplateBtn">Insérer « Quand…, je… »</button>
+        </p>
+
+        <div class="form-row">
+          <div class="page-field">
+            <button type="button" class="step" id="pageDown" aria-label="Page précédente">−</button>
+            <label for="pageInput">p.</label>
+            <input id="pageInput" class="page-input" maxlength="20" inputmode="numeric" enterkeyhint="done" placeholder="—">
+            <button type="button" class="step" id="pageUp" aria-label="Page suivante">+</button>
+          </div>
+          <input id="tagsInput" class="tags-input" maxlength="300" placeholder="#tags" autocapitalize="none" autocorrect="off" spellcheck="false" enterkeyhint="done">
+        </div>
+        <div class="tag-suggestions" id="tagSuggestions"></div>
+
+        <button type="submit" class="btn primary big wide" id="saveBtn">Enregistrer la note</button>
+      </form>
+
+      <section class="notes" aria-label="Notes du livre">
+        <div class="notes-head">
+          <h2>Notes <span class="count" id="noteCount"></span></h2>
+          <input id="filterInput" class="filter-input" type="search" placeholder="Filtrer…" autocapitalize="none" spellcheck="false">
+        </div>
+        <ol class="notes-list" id="notesList"></ol>
+        <p class="notes-empty" id="notesEmpty" hidden></p>
+      </section>
+    </main>
+
+    <main id="view-retenir" class="view pane" hidden></main>
+    <main id="view-appliquer" class="view pane" hidden></main>
+    <main id="view-progres" class="view pane" hidden></main>
+
+    <nav class="tabbar" role="tablist" aria-label="Sections">
+      <button class="tab" role="tab" type="button" data-tab="lire">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 6.5C10 5 7.5 4.5 4 4.5v13c3.5 0 6 .5 8 2 2-1.5 4.5-2 8-2v-13c-3.5 0-6 .5-8 2zM12 6.5v13"/></svg>
+        <span>Lire</span>
+      </button>
+      <button class="tab" role="tab" type="button" data-tab="retenir">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="7" width="13" height="12.5" rx="2"/><path d="M7.5 4.5h11a2 2 0 0 1 2 2V16"/></svg>
+        <span>Retenir</span><span class="badge" id="badgeRetenir" hidden></span>
+      </button>
+      <button class="tab" role="tab" type="button" data-tab="appliquer">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M8 12.3l2.7 2.7L16.2 9.5"/></svg>
+        <span>Appliquer</span><span class="badge dot" id="badgeAppliquer" hidden></span>
+      </button>
+      <button class="tab" role="tab" type="button" data-tab="progres">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19.5h16M7 16v-4M12 16V7.5M17 16v-6.5"/></svg>
+        <span>Progrès</span>
+      </button>
+    </nav>
+  </div>
+
+  <!-- Nouveau livre -->
+  <dialog id="newBookDialog" class="dialog">
+    <form id="newBookForm" method="dialog" autocomplete="off">
+      <h2>Nouveau livre</h2>
+      <label class="field"><span>Titre <span class="req">*</span></span>
+        <input id="nbTitle" name="titre" required maxlength="200" placeholder="Lettres à Lucilius" autocapitalize="words">
+      </label>
+      <label class="field">Auteur
+        <input id="nbAuthor" name="auteur" maxlength="120" placeholder="Sénèque" autocapitalize="words">
+      </label>
+      <div class="field-row">
+        <label class="field">Pages
+          <input id="nbPages" name="pages" inputmode="numeric" maxlength="5" placeholder="total">
+        </label>
+        <label class="field">J'en suis à la page
+          <input id="nbStart" name="pageActuelle" inputmode="numeric" maxlength="5" placeholder="vide = début">
+        </label>
+      </div>
+      <fieldset class="field segmented">
+        <legend>Format</legend>
+        <label><input type="radio" name="format" value="papier" checked> Papier</label>
+        <label><input type="radio" name="format" value="numerique"> Numérique</label>
+      </fieldset>
+      <p class="dialog-note">Une fiche Markdown est créée dans ton dépôt (dossier « fiches »), avec l'auteur en lien Obsidian.</p>
+      <div class="dialog-actions">
+        <button type="button" class="btn" data-close>Annuler</button>
+        <button type="submit" class="btn primary" value="create">Créer la fiche</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Fiche du livre -->
+  <dialog id="bookDialog" class="dialog">
+    <div class="dialog-body">
+      <h2 id="bdTitle"></h2>
+      <p class="bd-author" id="bdAuthor"></p>
+      <dl class="bd-facts" id="bdFacts"></dl>
+      <div class="inline-field">
+        <label for="bdPage">Ma progression : p.</label>
+        <input id="bdPage" class="mini-input" inputmode="numeric" maxlength="5">
+        <button type="button" class="btn small" id="bdPageSave">Corriger</button>
+      </div>
+      <div class="bd-actions">
+        <a class="btn" id="bdGithub" target="_blank" rel="noopener">Voir la fiche sur GitHub</a>
+        <button type="button" class="btn" id="bdFinish"></button>
+        <button type="button" class="btn" id="bdSynthesis" hidden>Bilan et synthèse du livre</button>
+        <button type="button" class="btn ghost" id="bdAbandon">Mettre ce livre de côté</button>
+      </div>
+      <div class="dialog-actions">
+        <button type="button" class="btn" data-close>Fermer</button>
+      </div>
+    </div>
+  </dialog>
+
+  <!-- Fin de session de lecture -->
+  <dialog id="sessionDialog" class="dialog">
+    <form id="sessionForm" method="dialog" autocomplete="off">
+      <h2>Session terminée</h2>
+      <p class="bd-author" id="ssBook"></p>
+      <div class="field-row even">
+        <label class="field">Durée (minutes)
+          <input id="ssMinutes" inputmode="numeric" maxlength="3">
+        </label>
+        <label class="field">Arrêté à la page
+          <input id="ssPage" inputmode="numeric" maxlength="5">
+        </label>
+      </div>
+      <p class="dialog-note" id="ssHint"></p>
+      <div class="dialog-actions">
+        <button type="button" class="btn" data-close>Continuer à lire</button>
+        <button type="submit" class="btn primary">Enregistrer</button>
+      </div>
+      <p class="dialog-foot"><button type="button" class="link-btn muted" id="ssDiscard">Ne pas compter cette session</button></p>
+    </form>
+  </dialog>
+
+  <!-- Livre terminé : bilan + synthèse de mémoire -->
+  <dialog id="recapDialog" class="dialog">
+    <form id="recapForm" method="dialog" autocomplete="off">
+      <p class="eyebrow">Livre terminé</p>
+      <h2 id="rcTitle"></h2>
+      <dl class="recap-facts" id="rcFacts"></dl>
+      <div id="rcSynthesis">
+        <h3>Ta synthèse, de mémoire</h3>
+        <p class="dialog-note">Avant de rouvrir tes notes : les 3 idées que tu gardes, et ce que tu vas faire autrement. Aller les chercher dans ta mémoire, c'est ce qui fixe le livre.</p>
+        <textarea id="rcText" class="plain-area" rows="7" spellcheck="true" placeholder="1. …"></textarea>
+      </div>
+      <div class="dialog-actions">
+        <button type="button" class="btn" data-close>Plus tard</button>
+        <button type="submit" class="btn primary" id="rcSave">Écrire dans la fiche</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Bienvenue + rituel de lecture (affiché une seule fois) -->
+  <dialog id="introDialog" class="dialog">
+    <form id="introForm" method="dialog" autocomplete="off">
+      <p class="eyebrow">Marginalia</p>
+      <h2>Lire, retenir, appliquer.</h2>
+      <ul class="intro-list">
+        <li><strong>Lire.</strong> Note ce qui t'arrête : citation, idée, question, ou action à essayer. Chronomètre tes sessions.</li>
+        <li><strong>Retenir.</strong> Chaque jour, quelques notes reviennent en cartes : tu retrouves l'idée de mémoire avant de la revoir.</li>
+        <li><strong>Appliquer.</strong> Tes « À appliquer » deviennent un plan : une action par semaine, puis ce que ça a donné.</li>
+      </ul>
+      <h3>Ton rituel de lecture</h3>
+      <p class="ritual-line">Quand il est <input id="inTime" class="mini-input time" type="time" step="60" aria-label="Heure">, je lis
+        <input id="inGoal" class="mini-input" inputmode="numeric" maxlength="3" aria-label="Objectif">
+        <select id="inUnit" class="mini-select"><option value="minutes">minutes</option><option value="pages">pages</option></select>.</p>
+      <p class="dialog-note">Décider à l'avance du moment est ce qui fait qu'on s'y tient. Dans les réglages, tu trouveras comment te le faire rappeler chaque soir par ton iPhone, et le raccourci « Noter » pour noter en un geste.</p>
+      <div class="dialog-actions">
+        <button type="submit" class="btn primary">C'est parti</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Réglages -->
+  <dialog id="settingsDialog" class="dialog">
+    <div class="dialog-body">
+      <h2>Réglages</h2>
+
+      <h3>Mon rituel de lecture</h3>
+      <p class="ritual-line">Quand il est <input id="rtTime" class="mini-input time" type="time" step="60" aria-label="Heure">, je lis
+        <input id="rtGoal" class="mini-input" inputmode="numeric" maxlength="3" aria-label="Objectif">
+        <select id="rtUnit" class="mini-select"><option value="minutes">minutes</option><option value="pages">pages</option></select>.</p>
+      <div class="inline-field">
+        <label for="rvLimit">Cartes à réviser par jour, au plus</label>
+        <input id="rvLimit" class="mini-input" inputmode="numeric" maxlength="2">
+      </div>
+
+      <h3>Sur ton iPhone</h3>
+      <div class="menu-list">
+        <button type="button" class="menu-item" id="openShortcutGuide"><strong>Raccourci « Noter »</strong><span>Noter depuis n'importe quelle app, en dictant, ou avec le bouton Action</span></button>
+        <button type="button" class="menu-item" id="openReminderGuide"><strong>Rappel du soir</strong><span>Ton iPhone te rappelle ton rituel, à {heure}</span></button>
+      </div>
+
+      <h3>Mes données</h3>
+      <p class="path block" id="sdRepo"></p>
+      <div class="inline-actions">
+        <button type="button" class="btn small" id="sdSync">Synchroniser</button>
+        <a class="btn small" id="sdGithub" target="_blank" rel="noopener">Ouvrir sur GitHub</a>
+        <label class="btn small file-btn">Importer des fiches .md<input type="file" id="sdImport" accept=".md,text/markdown,text/plain" multiple></label>
+      </div>
+      <p class="dialog-note">Tes fiches V1/V2 du PC s'importent telles quelles. Pour lire et modifier tes notes dans Obsidian, clone ce dépôt dans ton vault (extension « Obsidian Git »).</p>
+
+      <h3>Options</h3>
+      <label class="check"><input type="checkbox" id="optClean"><span>Nettoyer le texte collé depuis un PDF ou Kindle <span class="muted">— lignes et césures recollées, page Kindle détectée</span></span></label>
+
+      <h3>Compte</h3>
+      <div class="inline-actions">
+        <button type="button" class="btn small" id="sdReconnect">Changer de jeton</button>
+        <button type="button" class="btn small ghost" id="sdDisconnect">Se déconnecter</button>
+      </div>
+      <p class="version muted" id="sdVersion"></p>
+      <div class="dialog-actions">
+        <button type="button" class="btn primary" data-close>Fermer</button>
+      </div>
+    </div>
+  </dialog>
+
+  <!-- État de la synchronisation -->
+  <dialog id="syncDialog" class="dialog">
+    <div class="dialog-body">
+      <h2>Synchronisation</h2>
+      <p class="sync-state" id="sySummary"></p>
+      <dl class="bd-facts" id="syFacts"></dl>
+      <ul class="sync-errors" id="syErrors" hidden></ul>
+      <p class="dialog-note">Tout ce que tu fais est d'abord gardé sur ton téléphone, puis envoyé à ton dépôt GitHub dès qu'il y a du réseau (chaque envoi est un commit). Les notes du raccourci « Noter » sont rangées à chaque synchronisation.</p>
+      <div class="dialog-actions">
+        <button type="button" class="btn" data-close>Fermer</button>
+        <button type="button" class="btn primary" id="sySync">Synchroniser maintenant</button>
+      </div>
+    </div>
+  </dialog>
+
+  <!-- Guides iPhone : raccourci « Noter » et rappel du soir -->
+  <dialog id="guideDialog" class="dialog tall">
+    <div class="dialog-body" id="guideBody"></div>
+  </dialog>
+
+  <div class="toast" id="toast" popover="manual" role="status" aria-live="polite" hidden>
+    <span class="toast-text" id="toastText"></span>
+    <button type="button" class="toast-action" id="toastAction" hidden></button>
+  </div>
+</body>
+</html>

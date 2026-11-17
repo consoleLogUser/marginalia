@@ -1,0 +1,20 @@
+{
+  "name": "marginalia-web",
+  "version": "3.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Marginalia — web app iPhone pour lire, retenir et appliquer ses lectures (notes synchronisées avec un dépôt GitHub privé).",
+  "scripts": {
+    "start": "node scripts/serve.js",
+    "dev": "node scripts/serve.js --mock",
+    "test": "node --test",
+    "test:e2e": "node scripts/e2e.js",
+    "stamp": "node scripts/stamp-sw.js"
+  },
+  "devDependencies": {
+    "playwright": "^1.63.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
